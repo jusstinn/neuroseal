@@ -1,0 +1,2 @@
+[console_scripts]
+neuroseal = neuroseal.cli:main

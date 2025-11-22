@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+attack_results/
+safe-llama/
+normal.json
+locked.json
+neuroseal_impact.png
+

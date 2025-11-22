@@ -1,0 +1,26 @@
+name: 'NeuroSeal'
+description: 'Seal model weights to prevent malicious fine-tuning'
+inputs:
+  model_path:
+    description: 'Path to the input model or HuggingFace ID'
+    required: true
+  output_path:
+    description: 'Directory to save the sealed model'
+    required: true
+  token:
+    description: 'Hugging Face Token (Optional)'
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Install NeuroSeal
+      run: pip install .
+      shell: bash
+    - name: Run NeuroSeal Lock
+      run: |
+        if [ -n "${{ inputs.token }}" ]; then
+          neuroseal lock ${{ inputs.model_path }} ${{ inputs.output_path }} --token ${{ inputs.token }}
+        else
+          neuroseal lock ${{ inputs.model_path }} ${{ inputs.output_path }}
+        fi
+      shell: bash
