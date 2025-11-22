@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 from neuroseal.core import apply_lock
 
 def main():
@@ -17,7 +18,15 @@ def main():
     args = parser.parse_args()
 
     if args.command == "lock":
-        apply_lock(args.input_model, args.output_dir, args.scale, token=args.token, password=args.password)
+        # --- Security: Token Warning ---
+        if args.token:
+            print("⚠️ WARNING: Passing tokens via CLI is insecure. Please use the HF_TOKEN environment variable.")
+            token_to_use = args.token
+        else:
+            # Try env var
+            token_to_use = os.getenv("HF_TOKEN")
+            
+        apply_lock(args.input_model, args.output_dir, args.scale, token=token_to_use, password=args.password)
     else:
         parser.print_help()
         sys.exit(1)

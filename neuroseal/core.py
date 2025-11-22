@@ -3,6 +3,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import os
 import hashlib
 import random
+import json
+from datetime import datetime
 
 def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str = None, password: str = None):
     """
@@ -15,6 +17,11 @@ def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str
         token: Optional Hugging Face token for authentication.
         password: Optional password for randomized locking.
     """
+    # --- Security: Double-Lock Prevention ---
+    if os.path.exists(os.path.join(model_path, "neuroseal_config.json")):
+        raise ValueError(f"Input model at {model_path} is already sealed! Preventing double-locking.")
+
+    # --- Security: Token Handling ---
     auth_token = token or os.getenv("HF_TOKEN")
 
     print(f"Loading model from {model_path} in bfloat16...")
@@ -30,6 +37,18 @@ def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str
         print(f"[Error] Auth Error: Use --token or run 'huggingface-cli login'")
         print(f"Details: {e}")
         return
+
+    # --- Security: Architecture Validation ---
+    # We need to verify the model actually has the layers we intend to lock.
+    # Scan modules to see if any target layers exist.
+    has_target_layers = False
+    for name, _ in model.named_modules():
+        if any(target in name for target in ['v_proj', 'up_proj', 'down_proj', 'o_proj']):
+            has_target_layers = True
+            break
+    
+    if not has_target_layers:
+        raise ValueError("Unsupported Architecture: Could not find v_proj, up_proj, down_proj, or o_proj layers.")
 
     if password:
         print(f"[SECURE] Generating cryptographic lock from password...")
@@ -66,6 +85,8 @@ def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str
                 
                 # Apply to known submodules
                 # Llama/Mistral structure: self_attn.v_proj/o_proj, mlp.up_proj/down_proj
+                # Crucial: Ensure paired layers use exact same factor
+                
                 if hasattr(layer, 'self_attn'):
                     if hasattr(layer.self_attn, 'v_proj') and hasattr(layer.self_attn, 'o_proj'):
                         layer.self_attn.v_proj.weight.data *= layer_scale
@@ -77,9 +98,6 @@ def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str
                         layer.mlp.down_proj.weight.data /= layer_scale
         else:
             # Fallback to generic traversal for unknown architectures (Static only or global random)
-            # If randomized, we can't guarantee pairing match easily without complex logic,
-            # so we fallback to static or global random for safety? 
-            # Let's enforce static/global random if we can't find structure.
             print("[WARN] Could not detect standard layer structure. Falling back to generic traversal.")
             if use_random:
                  print("[WARN] Randomized locking requires standard layer structure. Using global random scale.")
@@ -98,4 +116,14 @@ def apply_lock(model_path: str, save_path: str, scale: float = 100.0, token: str
     os.makedirs(save_path, exist_ok=True)
     model.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)
+    
+    # --- Security: Metadata ---
+    metadata = {
+        'sealed': True,
+        'method': 'dynamic_scale' if use_random else 'static_scale',
+        'timestamp': str(datetime.now())
+    }
+    with open(os.path.join(save_path, "neuroseal_config.json"), 'w') as f:
+        json.dump(metadata, f, indent=2)
+        
     print("Model sealed successfully.")
