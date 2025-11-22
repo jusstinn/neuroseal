@@ -45,11 +45,10 @@ def main():
         fp16=True if not torch.cuda.is_bf16_supported() else False,
         bf16=True if torch.cuda.is_bf16_supported() else False,
         report_to="none",
-        dataset_text_field="text",
-        max_seq_length=512,
     )
 
     # Initialize Trainer
+    # We removed 'max_seq_length' and 'dataset_text_field' to use defaults
     trainer = SFTTrainer(
         model=args.model_path,
         train_dataset=dataset,
@@ -62,7 +61,6 @@ def main():
     print("Training complete.")
 
     # Extract loss history
-    # log_history is a list of dicts, e.g., [{'loss': 2.3, 'step': 1}, ...]
     loss_history = [x['loss'] for x in trainer.state.log_history if 'loss' in x]
     
     print(f"Saving loss history to {args.output_json}...")
